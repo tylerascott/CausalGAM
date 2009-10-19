@@ -1,0 +1,9 @@
+import(gam)
+
+export(
+       estimate.ATE,
+       balance.IPW
+       )
+
+S3method(print, CausalGAM)
+S3method(print, balance)
