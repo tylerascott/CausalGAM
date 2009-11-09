@@ -229,11 +229,16 @@ estimate.ATE <- function(pscore.formula, pscore.family,
 
 
 
-  var.formula <- as.formula(substitute((res^2) ~ lo(pscore.probs,
-                                                    degree=variance.smooth.deg,
-                                                    span=variance.smooth.span),
-                                       list(variance.smooth.deg=variance.smooth.deg, variance.smooth.span=variance.smooth.span)))
-
+  if (length(unique(pscore.probs)) > 3){
+    var.formula <- as.formula(substitute((res^2) ~ lo(pscore.probs,
+                                                      degree=variance.smooth.deg,
+                                                      span=variance.smooth.span),
+                                         list(variance.smooth.deg=variance.smooth.deg, variance.smooth.span=variance.smooth.span)))
+  }
+  else{
+    var.formula <- as.formula(substitute((res^2) ~ pscore.probs,
+                                         list(variance.smooth.deg=variance.smooth.deg, variance.smooth.span=variance.smooth.span)))
+  }
   
 #  var.formula <- as.formula((res^2) ~ lo(pscore.probs,
 #                                         degree=2, span=.75))
@@ -408,16 +413,18 @@ estimate.ATE <- function(pscore.formula, pscore.family,
         round(x$ATE.AIPW.hat/x$ATE.AIPW.sand.SE, 4), "             ",
         "< 0.0001", "\n")    
   }
-  pval <- 2*(1-pnorm(abs(x$ATE.AIPW.hat/x$ATE.AIPW.asymp.SE)))
-  if (pval >= 0.0001){
-    cat("Estim. Asymptotic ", round(x$ATE.AIPW.asymp.SE, 4), "          ",
-        round(x$ATE.AIPW.hat/x$ATE.AIPW.asymp.SE, 4), "             ",
-        round(pval, 4), "\n")
-  }
-  else{
-    cat("Estim. Asymptotic ", round(x$ATE.AIPW.asymp.SE, 4), "          ",
-        round(x$ATE.AIPW.hat/x$ATE.AIPW.asymp.SE, 4), "             ",
-        "< 0.0001", "\n")    
+  if (!is.na(x$ATE.AIPW.asymp.SE)){
+    pval <- 2*(1-pnorm(abs(x$ATE.AIPW.hat/x$ATE.AIPW.asymp.SE)))
+    if (pval >= 0.0001){
+      cat("Estim. Asymptotic ", round(x$ATE.AIPW.asymp.SE, 4), "          ",
+          round(x$ATE.AIPW.hat/x$ATE.AIPW.asymp.SE, 4), "             ",
+          round(pval, 4), "\n")
+    }
+    else{
+      cat("Estim. Asymptotic ", round(x$ATE.AIPW.asymp.SE, 4), "          ",
+          round(x$ATE.AIPW.hat/x$ATE.AIPW.asymp.SE, 4), "             ",
+          "< 0.0001", "\n")    
+    }
   }
   if (!is.na(x$ATE.AIPW.bs.SE)){
     pval <- 2*(1-pnorm(abs(x$ATE.AIPW.hat/x$ATE.AIPW.bs.SE)))
@@ -440,16 +447,18 @@ estimate.ATE <- function(pscore.formula, pscore.family,
   cat("-------------------------------------------------------------------\n")
   cat("Estimated ATE: ", round(x$ATE.IPW.hat, 4), "\n")
   cat("                     SE            z-statistic            Pr(>|z|)\n")
-  pval <- 2*(1-pnorm(abs(x$ATE.IPW.hat/x$ATE.IPW.asymp.SE)))
-  if (pval >= 0.0001){
-    cat("Estim. Asymptotic ", round(x$ATE.IPW.asymp.SE, 4), "          ",
-        round(x$ATE.IPW.hat/x$ATE.IPW.asymp.SE, 4), "             ",
-        round(pval, 4), "\n")
-  }
-  else{
-    cat("Estim. Asymptotic ", round(x$ATE.IPW.asymp.SE, 4), "          ",
-        round(x$ATE.IPW.hat/x$ATE.IPW.asymp.SE, 4), "             ",
-        "< 0.0001", "\n")    
+  if (!is.na(x$ATE.IPW.asymp.SE)){
+    pval <- 2*(1-pnorm(abs(x$ATE.IPW.hat/x$ATE.IPW.asymp.SE)))
+    if (pval >= 0.0001){
+      cat("Estim. Asymptotic ", round(x$ATE.IPW.asymp.SE, 4), "          ",
+          round(x$ATE.IPW.hat/x$ATE.IPW.asymp.SE, 4), "             ",
+          round(pval, 4), "\n")
+    }
+    else{
+      cat("Estim. Asymptotic ", round(x$ATE.IPW.asymp.SE, 4), "          ",
+          round(x$ATE.IPW.hat/x$ATE.IPW.asymp.SE, 4), "             ",
+          "< 0.0001", "\n")    
+    }
   }
   if (!is.na(x$ATE.IPW.bs.SE)){
     pval <- 2*(1-pnorm(abs(x$ATE.IPW.hat/x$ATE.IPW.bs.SE)))
@@ -472,16 +481,18 @@ estimate.ATE <- function(pscore.formula, pscore.family,
   cat("-------------------------------------------------------------------\n")
   cat("Estimated ATE: ", round(x$ATE.reg.hat, 4), "\n")
   cat("                     SE            z-statistic            Pr(>|z|)\n")
-  pval <- 2*(1-pnorm(abs(x$ATE.reg.hat/x$ATE.reg.asymp.SE)))
-  if (pval >= 0.0001){
-    cat("Estim. Asymptotic ", round(x$ATE.reg.asymp.SE, 4), "          ",
-        round(x$ATE.reg.hat/x$ATE.reg.asymp.SE, 4), "             ",
-        round(pval, 4), "\n")
-  }
-  else{
-    cat("Estim. Asymptotic ", round(x$ATE.reg.asymp.SE, 4), "          ",
-        round(x$ATE.reg.hat/x$ATE.reg.asymp.SE, 4), "             ",
-        "< 0.0001", "\n")    
+  if (!is.na(x$ATE.reg.asymp.SE)){
+    pval <- 2*(1-pnorm(abs(x$ATE.reg.hat/x$ATE.reg.asymp.SE)))
+    if (pval >= 0.0001){
+      cat("Estim. Asymptotic ", round(x$ATE.reg.asymp.SE, 4), "          ",
+          round(x$ATE.reg.hat/x$ATE.reg.asymp.SE, 4), "             ",
+          round(pval, 4), "\n")
+    }
+    else{
+      cat("Estim. Asymptotic ", round(x$ATE.reg.asymp.SE, 4), "          ",
+          round(x$ATE.reg.hat/x$ATE.reg.asymp.SE, 4), "             ",
+          "< 0.0001", "\n")    
+    }
   }
   if (!is.na(x$ATE.reg.bs.SE)){
     pval <- 2*(1-pnorm(abs(x$ATE.reg.hat/x$ATE.reg.bs.SE)))
