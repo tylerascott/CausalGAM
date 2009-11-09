@@ -7,13 +7,10 @@
    
    # echo output to screen
    cat("##\n## CausalGAM Package\n")
-#   cat("## Copyright (C) 2008-", this.year,
+#   cat("## Copyright (C) 2009-", this.year,
    cat("## Copyright (C) 2009",
    " Adam Glynn and Kevin Quinn\n", sep="")
    require(gam, quietly=TRUE)
 }
 
-.onUnload <- function(libpath) {
-    library.dynam.unload("CausalGAM", libpath)
-}
 

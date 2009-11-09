@@ -1,6 +1,6 @@
 Package: CausalGAM
-Version: 0.1-1
-Date: 2009-10-19
+Version: 0.1-2
+Date: 2009-11-9
 Title: Estimation of Causal Effects with Generalized Additive Models
 Author: Adam Glynn <aglynn@iq.harvard.edu>, Kevin Quinn
         <kquinn@law.berkeley.edu>
@@ -13,6 +13,6 @@ Description: This package implements various estimators for average
         of generalized additive models for the treatment assignment
         model and/or outcome model.
 License: GPL-2
-Packaged: 2009-11-07 19:49:27 UTC; kquinn
+Packaged: 2009-11-09 22:08:48 UTC; Kevin
 Repository: CRAN
-Date/Publication: 2009-11-08 10:24:09
+Date/Publication: 2009-11-10 10:14:57
