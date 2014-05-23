@@ -1,0 +1,242 @@
+#function uses estimate.ATE from CausalGAM package as base (Glynn and Quin 2014)
+#original uses gam; this function uses gamm4, mcgv, and gam to enable fitting of random effects (i.e., such as for a multilevel model)
+
+estimate.ATE.gamm4<-function (pscore.formula, pscore.family, outcome.formula.t, outcome.formula.c, 
+                              pscore.form.ranef, treat.form.ranef, cont.form.ranef,
+                              outcome.family, treatment.var, data = NULL, 
+                              divby0.action = c("fail",  "truncate", "discard"), divby0.tol = 1e-08, nboot = 501, 
+                              variance.smooth.deg = 1, variance.smooth.span = 0.75, var.gam.plot = TRUE, 
+                              suppress.warnings = TRUE, ...) 
+{
+  require(mgcv)
+  require(gamm4)
+  require(gam)
+  if (is.null(data)) {
+    stop("'data' must be specified in call to 'estimate.ATE'\n")
+  }
+  if (nboot < 0) {
+    nboot <- 0
+  }
+  call <- match.call()
+  arg.list <- as.list(call)
+  if (("zzzzzbsfitzzzzz" %in% names(arg.list))) {
+    zzzzzbsfitzzzzz <- TRUE
+  }
+  else {
+    zzzzzbsfitzzzzz <- FALSE
+  }
+  if (variance.smooth.span <= 0 | variance.smooth.deg < 0) {
+    zzzzzbsfitzzzzz <- TRUE
+  }
+  divby0.action <- match.arg(divby0.action)
+  if (max(is.na(data)) > 0) {
+    stop("'data' contains NAs. Remove NAs and call estimate.ATE again.\n")
+  }
+  treatment.vec <- data[, treatment.var]
+  if (is.factor(treatment.vec)) {
+    treatment.values <- levels(treatment.vec)
+  }
+  else {
+    treatment.values <- sort(unique(treatment.vec))
+  }
+  treated.data <- data[treatment.vec == treatment.values[2], 
+                       ]
+  control.data <- data[treatment.vec == treatment.values[1], 
+                       ]
+  n.treated.pre <- nrow(treated.data)
+  n.control.pre <- nrow(control.data)
+  if (suppress.warnings) {
+    gam.ps <- suppressWarnings(gamm4(pscore.formula, random=pscore.form.ranef , family = pscore.family, 
+                                     data = data, na.action = "na.fail"))
+  }
+  else {
+    gam.ps <- gamm4(pscore.formula, random=pscore.form.ranef, family = pscore.family, 
+                    data = data, na.action = "na.fail")
+  }
+  pscore.probs <- as.vector(gam.ps[[2]]$fitted.values)
+  pscores.pre <- pscore.probs
+  truncated.indic <- rep(FALSE, nrow(data))
+  discarded.indic <- rep(FALSE, nrow(data))
+  n.treated.post <- n.treated.pre
+  n.control.post <- n.control.pre
+  if (min(pscore.probs) <= divby0.tol || max(pscore.probs) >= 
+        (1 - divby0.tol)) {
+    if (divby0.action == "fail") {
+      stop("\nCannot compute AIPW estimate because some\nprobabilities of treatment are numerically 0 and/or 1\n\n")
+    }
+    if (divby0.action == "truncate") {
+      truncated.indic[pscore.probs <= divby0.tol] <- TRUE
+      pscore.probs[pscore.probs <= divby0.tol] <- divby0.tol
+      truncated.indic[pscore.probs >= (1 - divby0.tol)] <- TRUE
+      pscore.probs[pscore.probs >= (1 - divby0.tol)] <- (1 - 
+                                                           divby0.tol)
+      n.treated.post <- sum((treatment.vec == treatment.values[2])[!truncated.indic])
+      n.control.post <- sum((treatment.vec == treatment.values[1])[!truncated.indic])
+    }
+    if (divby0.action == "discard") {
+      discarded.indic[pscore.probs <= divby0.tol] <- TRUE
+      discarded.indic[pscore.probs >= (1 - divby0.tol)] <- TRUE
+      pscore.probs <- pscore.probs[!discarded.indic]
+      treatment.vec <- treatment.vec[!discarded.indic]
+      data <- data[!discarded.indic, ]
+      treated.data <- data[treatment.vec == treatment.values[2], 
+                           ]
+      control.data <- data[treatment.vec == treatment.values[1], 
+                           ]
+      n.treated.post <- nrow(treated.data)
+      n.control.post <- nrow(control.data)
+    }
+  }
+  outcome.vec <- model.response(model.frame(outcome.formula.t, 
+                                            data = data))
+  if (suppress.warnings) {
+    gam.t <- suppressWarnings(gamm4(outcome.formula.t, family = outcome.family, random=treat.form.ranef,
+                                    data = treated.data, na.action = "na.fail", ...))
+    gam.c <- suppressWarnings(gamm4(outcome.formula.c, family = outcome.family,  random=cont.form.ranef,
+                                    data = control.data, na.action = "na.fail", ...))
+    outcome.treated.expectation <- mgcv::predict.gam(gam.t[[2]],newdata=data,type='response')
+    outcome.control.expectation <- mgcv::predict.gam(gam.c[[2]],newdata=data,type='response')
+                                                            
+    res.c <- suppressWarnings(residuals(gam.c[[2]], type = "response"))
+    res.t <- suppressWarnings(residuals(gam.t[[2]], type = "response"))
+  }
+  else {
+    gam.t <- gamm4(outcome.formula.t, family = outcome.family, random=treat.form.ranef,
+                   data = treated.data, na.action = "na.fail", ...)
+    gam.c <- gamm4(outcome.formula.c, family = outcome.family, random=cont.form.ranef,
+                   data = control.data, na.action = "na.fail", ...)
+    outcome.treated.expectation <- mgcv::predict.gam(gam.t[[2]],newdata=data,type='response')
+    outcome.control.expectation <- mgcv::predict.gam(gam.c[[2]],newdata=data,type='response')
+    res.c <- residuals(gam.c[[2]], type = "response")
+    res.t <- residuals(gam.t[[2]], type = "response")
+  }
+  n <- length(treatment.vec)
+  term1 <- rep(0, n)
+  term2 <- rep(0, n)
+  term3 <- rep(0, n)
+  term4 <- rep(0, n)
+  control.indic <- treatment.vec == treatment.values[1]
+  treated.indic <- treatment.vec == treatment.values[2]
+  term1 <- outcome.vec/pscore.probs
+  term1[control.indic] <- 0
+  term2 <- ((1 - pscore.probs) * outcome.treated.expectation)/pscore.probs
+  term2[control.indic] <- ((0 - pscore.probs[control.indic]) * 
+                             outcome.treated.expectation[control.indic])/pscore.probs[control.indic]
+  term3 <- outcome.vec/(1 - pscore.probs)
+  term3[treated.indic] <- 0
+  term4 <- ((1 - pscore.probs) * outcome.control.expectation)/(1 - 
+                                                                 pscore.probs)
+  term4[control.indic] <- ((0 - pscore.probs[control.indic]) * 
+                             outcome.control.expectation[control.indic])/(1 - pscore.probs[control.indic])
+  ATE.AIPW.hat <- (1/n) * (sum(term1) - sum(term2) - sum(term3) - 
+                             sum(term4))
+  I.hat <- term1 - term2 - term3 - term4 - ATE.AIPW.hat
+  ATE.AIPW.sand.var <- (1/n^2) * sum(I.hat^2)
+  ATE.AIPW.sand.se <- sqrt(ATE.AIPW.sand.var)
+  ATE.reg.hat <- mean(outcome.treated.expectation) - mean(outcome.control.expectation)
+  weight.norm.1 <- 1/sum(treated.indic/pscore.probs)
+  weight.norm.3 <- 1/sum((1 - treated.indic)/(1 - pscore.probs))
+  ATE.IPW.hat <- weight.norm.1 * sum(term1) - weight.norm.3 * 
+    sum(term3)
+  res.data.c <- data.frame(res = res.c, pscore.probs = pscore.probs[control.indic])
+  res.data.t <- data.frame(res = res.t, pscore.probs = pscore.probs[treated.indic])
+  if (length(unique(pscore.probs)) > 3) {
+    var.formula <- as.formula(substitute((res^2) ~ lo(pscore.probs, 
+                                                      degree = variance.smooth.deg, span = variance.smooth.span), 
+                                         list(variance.smooth.deg = variance.smooth.deg, variance.smooth.span = variance.smooth.span)))
+  }
+  else {
+    var.formula <- as.formula(substitute((res^2) ~ pscore.probs, 
+                                         list(variance.smooth.deg = variance.smooth.deg, variance.smooth.span = variance.smooth.span)))
+  }
+  
+  if (!zzzzzbsfitzzzzz) {
+    if (suppress.warnings) {
+      var.gam.c <- suppressWarnings(gam::gam(var.formula, data = res.data.c, 
+                                        family = gaussian(log)))
+      var.gam.t <- suppressWarnings(gam::gam(var.formula, data = res.data.t, 
+                                        family = gaussian(log)))
+    }
+    else {
+      var.gam.c <- gam::gam(var.formula, data = res.data.c, 
+                       family = gaussian(log))
+      var.gam.t <- gam::gam(var.formula, data = res.data.t, 
+                       family = gaussian(log))
+    }
+    if (var.gam.plot) {
+      par(mfrow = c(2, 1))
+      plot(res.data.c$pscore.probs, res.data.c$res^2, xlab = "Propensity Score", 
+           ylab = "Squared Residuals", main = "Conditional Variance under Control")
+      ord.c <- order(res.data.c$pscore.probs)
+      lines(res.data.c$pscore.probs[ord.c], gam::predict.gam(var.gam.c, 
+                                                    type = "response")[ord.c], col = "red", lwd = 2)
+      plot(res.data.t$pscore.probs, res.data.t$res^2, xlab = "Propensity Score", 
+           ylab = "Squared Residuals", main = "Conditional Variance under Treatment")
+      ord.t <- order(res.data.t$pscore.probs)
+      lines(res.data.t$pscore.probs[ord.t], gam::predict.gam(var.gam.t, 
+                                                    type = "response")[ord.t], col = "red", lwd = 2)
+    }
+    cond.var.c <- suppressWarnings(gam::predict.gam(var.gam.c, newdata = data, 
+                                           type = "response"))
+    cond.var.t <- suppressWarnings(gam::predict.gam(var.gam.t, newdata = data, 
+                                           type = "response"))
+  }
+  else {
+    cond.var.c <- rep(NA, n)
+    cond.var.t <- rep(NA, n)
+  }
+  ATE.AIPW.asymp.var <- (1/(n^2)) * sum(cond.var.t/pscore.probs + 
+                                          cond.var.c/(1 - pscore.probs) + (outcome.treated.expectation - 
+                                                                             outcome.control.expectation - ATE.AIPW.hat)^2)
+  ATE.reg.asymp.var <- (1/(n^2)) * sum(cond.var.t/pscore.probs + 
+                                         cond.var.c/(1 - pscore.probs) + (outcome.treated.expectation - 
+                                                                            outcome.control.expectation - ATE.reg.hat)^2)
+  ATE.IPW.asymp.var <- (1/(n^2)) * sum(cond.var.t/pscore.probs + 
+                                         cond.var.c/(1 - pscore.probs) + (outcome.treated.expectation - 
+                                                                            outcome.control.expectation - ATE.IPW.hat)^2)
+  ATE.AIPW.asymp.se <- sqrt(ATE.AIPW.asymp.var)
+  ATE.reg.asymp.se <- sqrt(ATE.reg.asymp.var)
+  ATE.IPW.asymp.se <- sqrt(ATE.IPW.asymp.var)
+  ATE.AIPW.bs <- rep(NA, nboot)
+  ATE.reg.bs <- rep(NA, nboot)
+  ATE.IPW.bs <- rep(NA, nboot)
+  ATE.AIPW.bs.se <- NA
+  ATE.reg.bs.se <- NA
+  ATE.IPW.bs.se <- NA
+  if (nboot > 0) {
+    for (biter in 1:nboot) {
+      print(paste(round(100*biter/nboot,1),'%',sep=''))
+      boot.inds <- sample(1:n, n, replace = TRUE)
+      data.bs <- data[boot.inds, ]
+      out <- estimate.ATE.gamm4(pscore.formula = pscore.formula, pscore.form.ranef, cont.form.ranef,treat.form.ranef,
+                          pscore.family = pscore.family, outcome.formula.t = outcome.formula.t, 
+                          outcome.formula.c = outcome.formula.c, outcome.family = outcome.family, 
+                          treatment.var = treatment.var, variance.smooth.deg = variance.smooth.deg, 
+                          variance.smooth.span = variance.smooth.span, 
+                          data = data.bs, divby0.action = divby0.action, 
+                          divby0.tol = divby0.tol, nboot = 0, var.gam.plot = FALSE, 
+                          suppress.warnings = suppress.warnings, zzzzzbsfitzzzzz = TRUE)
+      ATE.AIPW.bs[biter] <- out$ATE.AIPW.hat
+      ATE.reg.bs[biter] <- out$ATE.reg.hat
+      ATE.IPW.bs[biter] <- out$ATE.IPW.hat
+    }
+    ATE.AIPW.bs.se <- sd(ATE.AIPW.bs)
+    ATE.reg.bs.se <- sd(ATE.reg.bs)
+    ATE.IPW.bs.se <- sd(ATE.IPW.bs)
+  }
+  return(structure(list(ATE.AIPW.hat = ATE.AIPW.hat, ATE.reg.hat = ATE.reg.hat, 
+                        ATE.IPW.hat = ATE.IPW.hat, ATE.AIPW.sand.SE = ATE.AIPW.sand.se, 
+                        ATE.AIPW.asymp.SE = ATE.AIPW.asymp.se, ATE.reg.asymp.SE = ATE.reg.asymp.se, 
+                        ATE.IPW.asymp.SE = ATE.IPW.asymp.se, ATE.AIPW.bs.SE = ATE.AIPW.bs.se, 
+                        ATE.reg.bs.SE = ATE.reg.bs.se, ATE.IPW.bs.SE = ATE.IPW.bs.se, 
+                        ATE.AIPW.bs = ATE.AIPW.bs, ATE.reg.bs = ATE.reg.bs, ATE.IPW.bs = ATE.IPW.bs, 
+                        gam.t = gam.t, gam.c = gam.c, gam.ps = gam.ps[[2]], truncated.indic = truncated.indic, 
+                        discarded.indic = discarded.indic, treated.value = treatment.values[2], 
+                        control.value = treatment.values[1], treatment.var = treatment.var, 
+                        n.treated.prediscard = n.treated.pre, n.control.prediscard = n.control.pre, 
+                        n.treated.postdiscard = n.treated.post, n.control.postdiscard = n.control.post, 
+                        pscores.prediscard = pscores.pre, pscores.postdiscard = pscore.probs, 
+                        cond.var.t = cond.var.t, cond.var.c = cond.var.c, call = call, 
+                        data = data), class = "CausalGAM"))
+}
+
