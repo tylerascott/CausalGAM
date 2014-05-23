@@ -1,6 +1,3 @@
-#function uses estimate.ATE from CausalGAM package as base (Glynn and Quin 2014)
-#original uses gam; this function uses gamm4, mcgv, and gam to enable fitting of random effects (i.e., such as for a multilevel model)
-
 estimate.ATE.gamm4<-function (pscore.formula, pscore.family, outcome.formula.t, outcome.formula.c, 
                               pscore.form.ranef, treat.form.ranef, cont.form.ranef,
                               outcome.family, treatment.var, data = NULL, 
